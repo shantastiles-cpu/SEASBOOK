@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEAS Study Space Booking System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root { --maroon:#500000; --maroon2:#6a0000; --bg:#f7f7f7; --card:#ffffff; --text:#222; --green:#2e9d57; --red:#c0392b; --blue:#0b6efd; --gold:#c49a22; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'DM Sans',sans-serif;background:#fff;color:var(--text)}
+  .topbar{background:var(--maroon);color:#fff;padding:.75rem 1rem}
+  .brand{font-weight:600;letter-spacing:.03em}
+  .wrapper{display:grid;grid-template-columns:280px 1fr 340px;gap:16px;padding:16px}
+  .panel{background:var(--card);border:1px solid #eee;border-radius:6px;padding:12px}
+  .panel h3,.side h4{margin:0 0 .6rem;color:var(--maroon)}
+  .btn{background:var(--maroon);color:#fff;border:none;padding:.8rem 1rem;border-radius:4px;cursor:pointer;font-size:.9rem}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .btn-secondary{background:#ccc;color:#222;border:none;padding:.6rem .9rem;border-radius:4px;cursor:pointer}
+  .label{font-size:.9rem;font-weight:600;color:#fff;background:var(--maroon2);padding:.5rem .7rem;border-radius:4px;display:inline-block;margin-bottom:.5rem}
+  .live{display:flex;align-items:center;gap:.5rem;margin-bottom:.7rem}
+  .live-dot{width:10px;height:10px;border-radius:50%;background:var(--blue)}
+  .dropdown,input,textarea{width:100%;padding:.6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+  .map{background:var(--bg);border:1px dashed #ddd;border-radius:6px;padding:12px;min-height:520px}
+  .map-wrap{position:relative;width:100%;max-width:800px;margin-top:8px}
+  .map-img{width:100%;display:block;border-radius:6px;border:1px solid #ddd}
+  .form-status{font-size:.85rem;margin-top:.5rem;color:#555}
+  .error{color:var(--red)} .success{color:var(--green)}
+  .res-item{background:#fafafa;border:1px solid #eee;border-radius:6px;padding:.6rem;margin-bottom:.5rem;font-size:.9rem}
+  .muted{color:#777;font-size:.88rem}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999}
+  .modal{background:#fff;padding:1rem 1.5rem;border-radius:6px;max-width:340px;width:calc(100% - 32px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .modal h4{margin-top:0;color:var(--maroon)}
+  .modal-actions{margin-top:.8rem;display:flex;justify-content:flex-end;gap:.5rem}
+  .section-spacer{margin-top:16px}
+  @media(max-width:1100px){.wrapper{grid-template-columns:1fr}.map-wrap{max-width:100%}}
+</style>
+</head>
+<body>
+
+<div class="topbar" style="display:flex;justify-content:space-between;align-items:center;">
+  <div class="brand">SEAS Study Space Booking System</div>
+  <a id="staffLink" href="staff.html" style="display:none;color:#fff;text-decoration:none;font-weight:500;">Staff Management</a>
+</div>
+
+<div class="wrapper">
+  <!-- LEFT -->
+  <div class="panel">
+    <div class="live">
+      <div class="live-dot" id="liveDot"></div>
+      <div id="liveText">Connecting...</div>
+    </div>
+
+    <div class="label">1) Select Location</div>
+    <select id="locationDropdown" class="dropdown">
+      <option value="">Loading spaces...</option>
+    </select>
+
+    <div class="label" style="margin-top:.8rem;">2) Select Expected Check-Out Time</div>
+    <select id="timeDropdown" class="dropdown"></select>
+
+    <div style="margin-top:16px">
+      <button id="submitBtn" class="btn">Press Here to Submit</button>
+      <div id="submitStatus" class="form-status"></div>
+    </div>
+
+    <div class="section-spacer">
+      <h4 style="color:var(--maroon);margin:0 0 .5rem 0;">Your Analytics</h4>
+      <div id="analyticsBox" class="res-item">
+        <div class="muted">Enter your TAMU email to view analytics.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="panel map">
+    <h3>Office Map</h3>
+    <div id="gatheringLabel" style="font-size:.9rem;margin-bottom:.4rem;">Loading availability...</div>
+    <div class="map-wrap">
+      <img src="office_map.png" alt="Office Map" class="map-img">
+    </div>
+    <div class="muted" style="margin-top:10px">
+      Map includes D1–D5, Desk 6–9, HA, HB, P1, Gathering Room, Front Desk, Kitchen/Storage, and Staff Cubicles [1]
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div>
+    <div class="panel side">
+      <h4>Your Reservation</h4>
+      <div id="myReservation"><div class="muted">No active reservation.</div></div>
+    </div>
+
+    <div class="panel side section-spacer">
+      <h4>Today's Staff Reservations</h4>
+      <div id="todayStaffReservations"><div class="muted">Loading...</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="emailModal">
+  <div class="modal">
+    <h4>Enter your TAMU email</h4>
+    <p>Please enter your TAMU email before reserving a space.</p>
+    <input type="email" id="studentEmailInput" placeholder="name@tamu.edu">
+    <div class="modal-actions">
+      <button class="btn-secondary" id="emailCancelBtn">View Only</button>
+      <button class="btn" id="emailSaveBtn">Continue</button>
+    </div>
+    <div id="emailError" class="form-status error"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wdqofwuoowjtbkygqpee.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GCumppG7xkBbGZvUNbYpIQ_1F0bPkrq';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+window.seasSupabase = db;
+
+const EMAIL_NOTIFICATIONS_ENABLED = false; // No Resend configuration in typed-email mode.
+
+let spaces = [];
+let todayStaffReservationsList = [];
+let activeReservation = null;
+let studentEmail = localStorage.getItem('studySpaceEmail') || null;
+let isStaff = false;
+
+const locationDropdown = document.getElementById('locationDropdown');
+const submitStatus = document.getElementById('submitStatus');
+const submitBtn = document.getElementById('submitBtn');
+
+function parseDbDate(dateStr) {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+  let cleaned = String(dateStr).trim().replace(' ', 'T');
+  let d = new Date(cleaned);
+  if (isNaN(d.getTime())) {
+    cleaned = String(dateStr).trim().replace(/-/g, '/').replace('T', ' ');
+    d = new Date(cleaned);
+  }
+  return d;
+}
+
+function formatRawDateTime(dateStr) {
+  if (!dateStr) return '';
+  const cleanStr = dateStr.replace('T', ' ').split('.')[0];
+  const parts = cleanStr.split(' ');
+  if (parts.length < 2) return dateStr;
+
+  const [datePart, timePart] = parts;
+  const [year, month, day] = datePart.split('-');
+  const [hours, minutes] = timePart.split(':');
+
+  let h = parseInt(hours, 10);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+
+  return `${parseInt(month, 10)}/${parseInt(day, 10)}/${year}, ${h}:${minutes} ${ampm}`;
+}
+
+function setStatus(message, ok=true){
+  submitStatus.textContent = message;
+  submitStatus.className = 'form-status ' + (ok ? 'success' : 'error');
+}
+
+function updateLiveLabel(connected=true){
+  const now = new Date();
+  const minutes = now.getHours()*60 + now.getMinutes();
+  const open = 9*60, close = 16*60;
+  const dot = document.getElementById('liveDot');
+  const text = document.getElementById('liveText');
+
+  if(!connected){
+    dot.style.background='#c0392b';
+    text.textContent='Unable to connect to availability';
+  } else if(minutes < open){
+    dot.style.background='#c0392b';
+    text.textContent='Office Closed - Opens at 9:00 AM';
+  } else if(minutes >= close){
+    dot.style.background='#c0392b';
+    text.textContent='Office Closed';
+  } else {
+    dot.style.background='#0b6efd';
+    text.textContent='Live Updates On';
+  }
+}
+
+function buildTimes(){
+  const dd = document.getElementById('timeDropdown');
+  dd.innerHTML = '';
+  const now = new Date();
+  const openMin = 9*60, closeMin = 16*60;
+  const curMin = now.getHours()*60 + now.getMinutes();
+  const base = Math.min(closeMin, Math.max(openMin, Math.floor(curMin/15)*15));
+
+  for(let m=base+15; m<=closeMin; m+=15){
+    const h=Math.floor(m/60), min=m%60;
+    const ampm=h>=12?'PM':'AM';
+    const hh=((h+11)%12)+1;
+    const label=`${String(hh).padStart(2,'0')}:${String(min).padStart(2,'0')} ${ampm}`;
+    dd.add(new Option(label,label));
+  }
+
+  if(!dd.options.length) dd.add(new Option('Office closed',''));
+}
+
+async function autoCheckoutExpired(){
+  try{
+    await db.rpc('auto_checkout_expired_reservations');
+  } catch(e){
+    console.error('Auto-checkout failed:', e);
+  }
+}
+
+async function checkStaff(email){
+  if(!email){
+    isStaff = false;
+    document.getElementById('staffLink').style.display = 'none';
+    return;
+  }
+
+  const { data, error } = await db.rpc('is_staff_user', { p_email: email });
+  isStaff = !!data && !error;
+  document.getElementById('staffLink').style.display = isStaff ? 'inline' : 'none';
+}
+
+async function loadSpaces(){
+  try {
+    const [spacesRes, staffRes] = await Promise.all([
+      db.from('spaces').select('*').order('title'),
+      db.rpc('get_today_staff_reservations')
+    ]);
+
+    if(spacesRes.error) throw spacesRes.error;
+
+    spaces = spacesRes.data || [];
+    if(staffRes.error){
+      console.error('Could not load staff reservations:', staffRes.error);
+      todayStaffReservationsList = [];
+    } else {
+      todayStaffReservationsList = staffRes.data || [];
+    }
+
+    renderAvailability();
+    updateLiveLabel(spaces.length > 0);
+  } catch(error) {
+    console.error('Could not load availability:', error);
+    spaces = [];
+    todayStaffReservationsList = [];
+    renderAvailability('Unable to load availability. Please refresh and try again.');
+    updateLiveLabel(false);
+  }
+}
+
+function renderAvailability(emptyMessage='No study spaces are configured. Staff: run the Supabase database setup.'){
+  const currentSelection = locationDropdown.value;
+  locationDropdown.innerHTML = '<option value="">Select a location...</option>';
+
+  if(!spaces.length){
+    locationDropdown.innerHTML = `<option value="">${emptyMessage}</option>`;
+    locationDropdown.disabled = true;
+    submitBtn.disabled = true;
+    document.getElementById('gatheringLabel').textContent = emptyMessage;
+    return;
+  }
+
+  locationDropdown.disabled = false;
+  submitBtn.disabled = false;
+
+  const now = new Date();
+  const selectedCheckoutStr = document.getElementById('timeDropdown').value;
+
+  let targetEndTime = new Date(now);
+  if (selectedCheckoutStr && selectedCheckoutStr !== 'Office closed') {
+    const match = selectedCheckoutStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+
+      targetEndTime.setHours(hours, minutes, 0, 0);
+    }
+  }
+
+  spaces.forEach(space => {
+    const activeStaffRes = todayStaffReservationsList.find(r => {
+      if (!r.space_title) return false;
+      const titleMatches = r.space_title.trim().toLowerCase() === space.title.trim().toLowerCase();
+      if (!titleMatches) return false;
+
+      const start = parseDbDate(r.starts_at);
+      const end = parseDbDate(r.ends_at);
+
+      return start < targetEndTime && end > now;
+    });
+
+    const isStaffBlocked = !!activeStaffRes;
+    const isOccupied = space.is_occupied || isStaffBlocked;
+
+    let statusText = '';
+    if (isStaffBlocked) {
+      statusText = `Occupied (Staff Event: ${activeStaffRes.reason || 'Reserved'})`;
+    } else if (space.type === 'Gathering') {
+      const openCount = space.max_capacity - space.current_capacity;
+      statusText = `${openCount} open`;
+    } else {
+      statusText = space.is_occupied ? 'Occupied' : 'Open';
+    }
+
+    const option = new Option(`${space.title} — ${statusText}`, space.title);
+
+    if (
+      (isStaffBlocked || (space.type !== 'Gathering' && isOccupied)) &&
+      (!activeReservation || activeReservation.space !== space.title)
+    ){
+      option.disabled = true;
+    }
+
+    locationDropdown.add(option);
+  });
+
+  if([...locationDropdown.options].some(o => o.value === currentSelection)){
+    locationDropdown.value = currentSelection;
+  }
+
+  const gathering = spaces.find(space => space.title === 'Gathering Room');
+  if(gathering){
+    const open = gathering.max_capacity - gathering.current_capacity;
+    document.getElementById('gatheringLabel').textContent =
+      `Gathering Room - ${open} Spaces Open (${gathering.current_capacity}/${gathering.max_capacity})`;
+  } else {
+    document.getElementById('gatheringLabel').textContent =
+      'Gathering Room is not configured.';
+  }
+}
+
+async function loadMyReservation() {
+  if (!studentEmail) {
+    activeReservation = null;
+    renderMyReservation();
+    renderAnalytics();
+    return;
+  }
+
+  const { data, error } = await db.rpc(
+    'get_my_reservation',
+    { p_student_email: studentEmail }
+  );
+
+  if (error) {
+    console.error('Could not load reservation:', error);
+    return;
+  }
+
+  // Ensure activeReservation is cleared if array is empty or returned null
+  if (!data || data.length === 0) {
+    activeReservation = null;
+  } else {
+    activeReservation = {
+      space: data[0].space_title,
+      checkOutTime: data[0].expected_checkout,
+      checkedInAt: data[0].checked_in_at
+    };
+  }
+
+  renderMyReservation();
+  renderAnalytics();
+  renderAvailability();
+}
+
+submitBtn.addEventListener('click', async () => {
+  if (!studentEmail) {
+    document.getElementById('emailModal').style.display = 'flex';
+    return;
+  }
+
+  submitBtn.disabled = true;
+  setStatus('Working...', true);
+
+  try {
+    await autoCheckoutExpired();
+
+    if (activeReservation) {
+      const checkoutSpaceTitle = activeReservation.space;
+
+      // 1. Perform checkout RPC
+      const { data, error } = await db.rpc('checkout_space', {
+        p_student_email: studentEmail
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.message);
+
+      // Clear local active state
+      activeReservation = null;
+      setStatus(data.message, true);
+
+      if(EMAIL_NOTIFICATIONS_ENABLED){
+        try {
+          await db.functions.invoke('send-checkout-email', {
+            body: {
+              student_email: studentEmail,
+              space_title: checkoutSpaceTitle
+            }
+          });
+        } catch (emailErr) {
+          console.warn('Checkout email failed to send:', emailErr);
+        }
+      }
+
+    } else {
+      const selectedSpace = locationDropdown.value;
+      const checkoutTime = document.getElementById('timeDropdown').value;
+
+      if (!selectedSpace) throw new Error('Please select a location first.');
+      if (!checkoutTime) throw new Error('Please select a check-out time.');
+
+      // 1. Perform reserve RPC
+      const { data, error } = await db.rpc('reserve_space', {
+        p_student_email: studentEmail,
+        p_space_title: selectedSpace,
+        p_expected_checkout: checkoutTime
+      });
+
+      if (error) throw error;
+      if (!data.success) {
+        throw new Error(
+          data.message === 'This space conflicts with a staff reservation.'
+            ? 'This space is reserved by staff during part of your selected time.'
+            : data.message
+        );
+      }
+
+      setStatus(data.message, true);
+
+      if(EMAIL_NOTIFICATIONS_ENABLED){
+        try {
+          await db.functions.invoke('send-reservation-email', {
+            body: {
+              student_email: studentEmail,
+              space_title: selectedSpace,
+              expected_checkout: checkoutTime
+            }
+          });
+        } catch (emailErr) {
+          console.warn('Reservation email failed to send:', emailErr);
+        }
+      }
+    }
+
+    // Refresh UI state
+    await loadSpaces();
+    await loadMyReservation();
+    await loadTodayStaffReservations();
+
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || 'Something went wrong.', false);
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+function renderMyReservation(){
+  const box=document.getElementById('myReservation');
+
+  if(!activeReservation){
+    box.innerHTML='<div class="muted">No active reservation.</div>';
+    submitBtn.textContent='Press Here to Submit';
+    return;
+  }
+
+  box.innerHTML=`
+    <div class="res-item">
+      <div><strong>${activeReservation.space}</strong></div>
+      <div class="muted">Expected checkout: ${activeReservation.checkOutTime || 'Not set'}</div>
+    </div>`;
+
+  submitBtn.textContent='Press Here to Check Out';
+}
+
+async function renderAnalytics(){
+  const box = document.getElementById('analyticsBox');
+
+  if(!studentEmail){
+    box.innerHTML='<div class="muted">Enter your TAMU email to view analytics.</div>';
+    return;
+  }
+
+  const { data, error } = await db.rpc(
+    'get_student_analytics',
+    { p_student_email: studentEmail }
+  );
+
+  if(error){
+    console.error('Could not load analytics:', error);
+    box.innerHTML='<div class="muted">Unable to load analytics.</div>';
+    return;
+  }
+
+  box.innerHTML=`
+    <div><strong>Most used space:</strong> ${data.most_used_space || 'None'}</div>
+    <div><strong>Total visits:</strong> ${data.total_visits || 0}</div>
+    <div><strong>Total study time:</strong> ${data.total_minutes || 0} minutes</div>
+  `;
+}
+
+async function loadTodayStaffReservations(){
+  const box = document.getElementById('todayStaffReservations');
+  const { data, error } = await db.rpc('get_today_staff_reservations');
+
+  if(error){
+    console.error('Could not load staff reservations:', error);
+    box.innerHTML='<div class="muted">Unable to load staff reservations.</div>';
+    return;
+  }
+
+  todayStaffReservationsList = data || [];
+  renderAvailability();
+
+  if(!data || !data.length){
+    box.innerHTML='<div class="muted">No staff reservations today.</div>';
+    return;
+  }
+
+  const formatDateTime = (value) =>
+  new Date(value).toLocaleString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  box.innerHTML = data.map(r => `
+    <div class="res-item">
+      <div><strong>${r.space_title}</strong></div>
+      <div class="muted">${r.reason}</div>
+      <div>${formatDateTime(r.starts_at)} → ${formatDateTime(r.ends_at)}</div>
+      <div class="muted">By: ${r.reserved_by}${r.recurring && r.recurring !== 'No' ? ' • ' + r.recurring : ''}</div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('emailSaveBtn').addEventListener('click', async ()=>{
+  const value=document.getElementById('studentEmailInput').value.trim().toLowerCase();
+  const error=document.getElementById('emailError');
+
+  if(!/^[^@\s]+@tamu\.edu$/i.test(value)){
+    error.textContent='Please enter a valid @tamu.edu email.';
+    return;
+  }
+
+  studentEmail=value;
+  localStorage.setItem('studySpaceEmail', value);
+  document.getElementById('emailModal').style.display='none';
+  error.textContent='';
+
+  await checkStaff(studentEmail);
+  await loadMyReservation();
+  await loadTodayStaffReservations();
+});
+
+document.getElementById('emailCancelBtn').addEventListener('click', ()=>{
+  document.getElementById('emailModal').style.display='none';
+});
+
+if(studentEmail){
+  document.getElementById('emailModal').style.display='none';
+  document.getElementById('studentEmailInput').value=studentEmail;
+}
+
+document.getElementById('timeDropdown').addEventListener('change', ()=>{
+  renderAvailability();
+});
+
+db
+  .channel('study-space-updates')
+  .on(
+    'postgres_changes',
+    { event:'*', schema:'public', table:'spaces' },
+    async ()=>{
+      await loadSpaces();
+      await loadMyReservation();
+    }
+  )
+  .subscribe();
+
+buildTimes();
+updateLiveLabel(true);
+
+(async function init(){
+  await autoCheckoutExpired();
+  await loadSpaces();
+  if(studentEmail){
+    await checkStaff(studentEmail);
+  }
+  await loadMyReservation();
+  await loadTodayStaffReservations();
+})();
+
+</script>
+
+
+
+<!-- TEMPORARY SUPABASE DEBUG PANEL - REMOVE AFTER FIXING -->
+<div id="seasDebugPanel" style="
+  margin: 20px;
+  padding: 14px;
+  background: #111;
+  color: #00ff66;
+  border: 2px solid #00ff66;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+  z-index: 99999;
+  position: relative;
+">
+SEAS Debug Panel Loaded.
+</div>
+
+<div style="margin: 20px;">
+  <button onclick="runSEASSupabaseDebug()" style="
+    padding: 10px 14px;
+    background: #500000;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  ">
+    Run Supabase Debug Test
+  </button>
+
+  <button onclick="clearSEASDebug()" style="
+    padding: 10px 14px;
+    background: #555;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-left: 8px;
+  ">
+    Clear Debug
+  </button>
+</div>
+
+<script>
+function seasDebugLog(label, value) {
+  const box = document.getElementById("seasDebugPanel");
+  if (!box) return;
+
+  let text;
+
+  try {
+    if (value instanceof Error) {
+      text = JSON.stringify({
+        name: value.name,
+        message: value.message,
+        stack: value.stack
+      }, null, 2);
+    } else if (typeof value === "string") {
+      text = value;
+    } else {
+      text = JSON.stringify(value, null, 2);
+    }
+  } catch (e) {
+    text = String(value);
+  }
+
+  box.textContent += "\n\n[" + label + "]\n" + text;
+}
+
+function clearSEASDebug() {
+  const box = document.getElementById("seasDebugPanel");
+  if (box) {
+    box.textContent = "SEAS Debug Panel Cleared.";
+  }
+}
+
+function getSEASSupabaseClient() {
+  /*
+    This tries to find your existing Supabase client.
+
+    If your code uses:
+      const supabase = window.supabase.createClient(...)
+    this should work.
+
+    If your code uses:
+      const supabaseClient = window.supabase.createClient(...)
+    this should also work if supabaseClient is global.
+
+    If neither works, the debug panel will tell you.
+  */
+
+  try {
+    if (typeof supabaseClient !== "undefined" && supabaseClient && typeof supabaseClient.from === "function") {
+      return supabaseClient;
+    }
+  } catch (e) {}
+
+  try {
+    if (typeof supabase !== "undefined" && supabase && typeof supabase.from === "function") {
+      return supabase;
+    }
+  } catch (e) {}
+
+  try {
+    if (window.supabaseClient && typeof window.supabaseClient.from === "function") {
+      return window.supabaseClient;
+    }
+  } catch (e) {}
+
+  try {
+    if (window.seasSupabase && typeof window.seasSupabase.from === "function") {
+      return window.seasSupabase;
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+async function runSEASSupabaseDebug() {
+  seasDebugLog("Debug started", new Date().toString());
+
+  const client = getSEASSupabaseClient();
+
+  if (!client) {
+    seasDebugLog("ERROR", `
+Could not find the Supabase client.
+
+This means your page may not have a usable variable named:
+- supabase
+- supabaseClient
+- window.seasSupabase
+
+Find the line in your index.html that looks like:
+
+const supabase = window.supabase.createClient(...)
+
+or
+
+const supabaseClient = window.supabase.createClient(...)
+
+Then tell me the exact variable name.
+`);
+    return;
+  }
+
+  seasDebugLog("Supabase client found", "Client exists and has .from() method.");
+
+  try {
+    seasDebugLog("Test 1", "Loading public.spaces...");
+
+    const spacesResult = await client
+      .from("spaces")
+      .select("*")
+      .order("title", { ascending: true });
+
+    seasDebugLog("spaces result", spacesResult);
+
+    if (spacesResult.error) {
+      seasDebugLog("SPACES ERROR MESSAGE", spacesResult.error.message);
+    } else {
+      seasDebugLog("spaces count", spacesResult.data ? spacesResult.data.length : 0);
+    }
+  } catch (err) {
+    seasDebugLog("spaces exception", err);
+  }
+
+  try {
+    seasDebugLog("Test 2", "Calling get_today_staff_reservations...");
+
+    const staffResult = await client
+      .rpc("get_today_staff_reservations");
+
+    seasDebugLog("staff reservations result", staffResult);
+
+    if (staffResult.error) {
+      seasDebugLog("STAFF RPC ERROR MESSAGE", staffResult.error.message);
+    } else {
+      seasDebugLog("staff reservations count", staffResult.data ? staffResult.data.length : 0);
+    }
+  } catch (err) {
+    seasDebugLog("staff reservations exception", err);
+  }
+
+  try {
+    seasDebugLog("Test 3", "Calling auto_checkout_expired_reservations...");
+
+    const autoResult = await client
+      .rpc("auto_checkout_expired_reservations");
+
+    seasDebugLog("auto checkout result", autoResult);
+
+    if (autoResult.error) {
+      seasDebugLog("AUTO CHECKOUT ERROR MESSAGE", autoResult.error.message);
+    }
+  } catch (err) {
+    seasDebugLog("auto checkout exception", err);
+  }
+
+  try {
+    seasDebugLog("Test 4", "Calling optional debug_public_availability if it exists...");
+
+    const debugResult = await client
+      .rpc("debug_public_availability");
+
+    seasDebugLog("debug_public_availability result", debugResult);
+
+    if (debugResult.error) {
+      seasDebugLog("debug_public_availability note", "This is okay if you have not created this SQL function.");
+      seasDebugLog("debug_public_availability error message", debugResult.error.message);
+    }
+  } catch (err) {
+    seasDebugLog("debug_public_availability exception", err);
+  }
+
+  seasDebugLog("Debug finished", new Date().toString());
+}
+
+/*
+  Automatically run the debug test a few seconds after page load.
+  This gives your normal Supabase setup time to initialize first.
+*/
+window.addEventListener("load", function () {
+  setTimeout(function () {
+    runSEASSupabaseDebug();
+  }, 1500);
+});
+</script>
+
+
+</body>
+</html>

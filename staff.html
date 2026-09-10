@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEAS Staff Management</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root { --maroon:#500000; --maroon2:#6a0000; --bg:#f7f7f7; --card:#ffffff; --text:#222; --green:#2e9d57; --red:#c0392b; --blue:#0b6efd; --gold:#c49a22; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'DM Sans',sans-serif;background:#fff;color:var(--text)}
+  .topbar{background:var(--maroon);color:#fff;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center}
+  .brand{font-weight:600;letter-spacing:.03em}
+  .wrapper{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:16px}
+  .panel{background:var(--card);border:1px solid #eee;border-radius:6px;padding:12px}
+  .panel h3,.panel h4{margin:0 0 .6rem;color:var(--maroon)}
+  .btn{background:var(--maroon);color:#fff;border:none;padding:.8rem 1rem;border-radius:4px;cursor:pointer;font-size:.9rem}
+  .btn:disabled,.btn-danger:disabled{opacity:.6;cursor:not-allowed}
+  .btn-secondary{background:#ccc;color:#222;border:none;padding:.6rem .9rem;border-radius:4px;cursor:pointer}
+  .dropdown,input,textarea{width:100%;max-width:100%;min-width:0;padding:.6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .res-item{background:#fafafa;border:1px solid #eee;border-radius:6px;padding:.6rem;margin-bottom:.5rem;font-size:.9rem}
+  .res-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.55rem}
+  .btn-small{padding:.4rem .65rem;font-size:.8rem}
+  .btn-danger{background:var(--red);color:#fff;border:none;border-radius:4px;cursor:pointer}
+  .muted{color:#777;font-size:.88rem}
+  .section-spacer{margin-top:16px}
+  .calendar-header{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .calendar-cell{
+    min-height:90px;border:1px solid #ddd;border-radius:6px;padding:6px;
+    background:#fff;cursor:pointer;
+  }
+  .calendar-cell.selected{border-color:var(--blue);background:#eef5ff}
+  .calendar-day{font-weight:600;font-size:.85rem;color:var(--maroon)}
+  .calendar-count{font-size:.75rem;color:#555;margin-top:4px}
+  .form-status{font-size:.85rem;margin-top:.5rem}
+  .success{color:var(--green)} .error{color:var(--red)}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999}
+  .modal{background:#fff;padding:1rem 1.5rem;border-radius:6px;max-width:340px;width:calc(100% - 32px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .modal h4{margin-top:0;color:var(--maroon)}
+  .modal-actions{margin-top:.8rem;display:flex;justify-content:flex-end;gap:.5rem}
+  @media(max-width:1000px){.wrapper{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">SEAS Staff Management</div>
+  <a href="index.html" style="color:#fff;text-decoration:none;font-weight:500;">← Back to Reservations</a>
+</div>
+
+<div class="wrapper">
+  <div>
+    <div class="panel">
+      <h3>Staff Reservation Calendar</h3>
+      <div class="calendar-header">
+        <button class="btn-secondary" id="prevMonthBtn">&lt;</button>
+        <select id="monthDropdown" class="dropdown" style="max-width:180px;"></select>
+        <select id="yearDropdown" class="dropdown" style="max-width:120px;"></select>
+        <button class="btn-secondary" id="nextMonthBtn">&gt;</button>
+      </div>
+      <div id="selectedDateLabel" class="muted" style="margin-bottom:8px;">Selected: </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </div>
+
+    <div class="panel section-spacer">
+      <h4>Reservations for Selected Day</h4>
+      <div id="selectedDayReservations"><div class="muted">No reservations.</div></div>
+    </div>
+
+    <div class="panel section-spacer">
+      <h4>Today's Study Logs</h4>
+      <div id="logsList"><div class="muted">Loading...</div></div>
+    </div>
+  </div>
+
+  <div>
+    
+
+    <div class="panel section-spacer">
+      <h4>Current Staff Reservations</h4>
+      <div id="staffReservationList"><div class="muted">Loading...</div></div>
+    </div>
+
+    <div class="panel section-spacer">
+      <h4>Create Staff Reservation</h4>
+      <div class="grid2">
+        <div style="min-width:0;">
+          <label class="muted">Location</label>
+          <select id="staffLocation" class="dropdown"></select>
+        </div>
+        <div style="min-width:0;">
+          <label class="muted">Recurring</label>
+          <select id="staffRecurring" class="dropdown">
+            <option value="No">No</option>
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Start and End inputs each on their own separate lines -->
+      <div class="section-spacer">
+        <label class="muted">Start</label>
+        <input type="datetime-local" id="staffStart">
+      </div>
+
+      <div class="section-spacer">
+        <label class="muted">End</label>
+        <input type="datetime-local" id="staffEnd">
+      </div>
+
+      <div class="section-spacer">
+        <label class="muted">Reason</label>
+        <textarea id="staffReason" rows="3" placeholder="e.g. Staff meeting"></textarea>
+      </div>
+
+      <button id="staffSubmitBtn" class="btn" style="margin-top:12px;">Submit Staff Reservation</button>
+      <div id="staffFormStatus" class="form-status"></div>
+    </div>
+
+    <div class="panel">
+      <h4>Active Student Bookings</h4>
+      <div id="activeBookingList"><div class="muted">Loading...</div></div>
+      <div id="activeBookingStatus" class="form-status"></div>
+    </div>
+  </div>
+</div>
+
+
+
+<div class="modal-backdrop" id="emailModal">
+  <div class="modal">
+    <h4>Enter your staff TAMU email</h4>
+    <p id="staffAuthInstructions">Temporary access: your email will be checked against the staff list.</p>
+    <input type="email" id="staffEmailInput" placeholder="name@tamu.edu">
+    <input type="text" id="staffOtpInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" style="display:none;margin-top:.6rem;">
+    <div class="modal-actions">
+      <button class="btn" id="staffEmailSaveBtn">Continue</button>
+      <button class="btn" id="staffOtpVerifyBtn" style="display:none;">Verify &amp; Sign In</button>
+    </div>
+    <div id="staffEmailError" class="form-status error"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="editReservationModal" style="display:none;">
+  <div class="modal">
+    <h4>Edit Staff Reservation</h4>
+    <label class="muted">Location</label>
+    <select id="editStaffLocation" class="dropdown"></select>
+    <div class="section-spacer"><label class="muted">Start</label><input type="datetime-local" id="editStaffStart"></div>
+    <div class="section-spacer"><label class="muted">End</label><input type="datetime-local" id="editStaffEnd"></div>
+    <div class="section-spacer"><label class="muted">Reason</label><textarea id="editStaffReason" rows="3"></textarea></div>
+    <div id="editStaffStatus" class="form-status"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="editStaffCloseBtn">Close</button>
+      <button class="btn" id="editStaffSaveBtn">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wdqofwuoowjtbkygqpee.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_GCumppG7xkBbGZvUNbYpIQ_1F0bPkrq';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const STAFF_AUTH_BYPASS = true; // Remove after Supabase Auth is configured.
+const EMAIL_NOTIFICATIONS_ENABLED = false; // No Resend configuration in bypass mode.
+
+let staffEmail = null;
+let pendingStaffEmail = null;
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+let selectedDate = new Date();
+let reservations = [];
+let activeBookings = [];
+let spaces = [];
+let editingReservationId = null;
+
+async function isStaffUser(email){
+  const { data, error } = await db.rpc('is_staff_user', { p_email: email });
+  return !!data && !error;
+}
+
+document.getElementById('staffEmailSaveBtn').addEventListener('click', async ()=>{
+  const val = document.getElementById('staffEmailInput').value.trim().toLowerCase();
+  const error = document.getElementById('staffEmailError');
+  const sendButton = document.getElementById('staffEmailSaveBtn');
+  if(!/^[^@\s]+@tamu\.edu$/i.test(val)){
+    error.textContent = 'Please enter a valid @tamu.edu email.';
+    return;
+  }
+
+  if(STAFF_AUTH_BYPASS){
+    const ok = await isStaffUser(val);
+    if(!ok){
+      error.className = 'form-status error';
+      error.textContent = 'This email is not on the authorized staff list.';
+      return;
+    }
+    staffEmail = val;
+    localStorage.setItem('staffEmail', val);
+    document.getElementById('emailModal').style.display = 'none';
+    await initStaffPage();
+    return;
+  }
+
+  sendButton.disabled = true;
+  error.className = 'form-status';
+  error.textContent = 'Sending verification code...';
+  const { error: sendError } = await db.auth.signInWithOtp({
+    email: val,
+    options: { shouldCreateUser: true }
+  });
+  sendButton.disabled = false;
+  if(sendError){
+    error.className = 'form-status error';
+    error.textContent = sendError.message || 'Could not send the verification code.';
+    return;
+  }
+
+  pendingStaffEmail = val;
+  document.getElementById('staffEmailInput').disabled = true;
+  document.getElementById('staffOtpInput').style.display = 'block';
+  document.getElementById('staffOtpVerifyBtn').style.display = 'inline-block';
+  document.getElementById('staffAuthInstructions').textContent = `Enter the code sent to ${val}.`;
+  error.className = 'form-status success';
+  error.textContent = 'Code sent. Check your TAMU inbox.';
+  document.getElementById('staffOtpInput').focus();
+});
+
+document.getElementById('staffOtpVerifyBtn').addEventListener('click', async ()=>{
+  const token = document.getElementById('staffOtpInput').value.trim();
+  const error = document.getElementById('staffEmailError');
+  const verifyButton = document.getElementById('staffOtpVerifyBtn');
+  if(!pendingStaffEmail || !/^\d{6}$/.test(token)){
+    error.className = 'form-status error';
+    error.textContent = 'Enter the six-digit code from your email.';
+    return;
+  }
+
+  verifyButton.disabled = true;
+  error.className = 'form-status';
+  error.textContent = 'Verifying...';
+  const { data, error: verifyError } = await db.auth.verifyOtp({
+    email: pendingStaffEmail,
+    token,
+    type: 'email'
+  });
+  verifyButton.disabled = false;
+  if(verifyError || !data.session){
+    error.className = 'form-status error';
+    error.textContent = verifyError?.message || 'That code is invalid or expired.';
+    return;
+  }
+
+  staffEmail = data.session.user.email.trim().toLowerCase();
+  const ok = await isStaffUser(staffEmail);
+  if(!ok){
+    await db.auth.signOut();
+    staffEmail = null;
+    pendingStaffEmail = null;
+    document.getElementById('staffEmailInput').disabled = false;
+    document.getElementById('staffOtpInput').value = '';
+    document.getElementById('staffOtpInput').style.display = 'none';
+    document.getElementById('staffOtpVerifyBtn').style.display = 'none';
+    document.getElementById('staffAuthInstructions').textContent = 'We will email you a six-digit verification code.';
+    error.className = 'form-status error';
+    error.textContent = 'This TAMU account is not authorized for staff access.';
+    return;
+  }
+  pendingStaffEmail = null;
+  document.getElementById('emailModal').style.display = 'none';
+  await initStaffPage();
+});
+
+async function loadSpaces(){
+  const { data } = await db.from('spaces').select('*').order('title');
+  spaces = data || [];
+  const dd = document.getElementById('staffLocation');
+  const editDd = document.getElementById('editStaffLocation');
+  dd.innerHTML = '<option value="">Select a location...</option>';
+  editDd.innerHTML = '<option value="">Select a location...</option>';
+  spaces.forEach(space => {
+    dd.add(new Option(space.title, space.title));
+    editDd.add(new Option(space.title, space.title));
+  });
+}
+
+async function loadActiveBookings(){
+  const box = document.getElementById('activeBookingList');
+  const { data, error } = STAFF_AUTH_BYPASS
+    ? await db.rpc('get_active_reservations_for_staff', { p_staff_email: staffEmail })
+    : await db.rpc('get_active_reservations_for_staff');
+
+  if(error){
+    console.error('Could not load active bookings:', error);
+    activeBookings = [];
+    box.innerHTML = '<div class="muted">Unable to load active bookings.</div>';
+    return;
+  }
+
+  activeBookings = data || [];
+  if(!activeBookings.length){
+    box.innerHTML = '<div class="muted">No active student bookings.</div>';
+    return;
+  }
+
+  box.innerHTML = activeBookings.map(booking => `
+    <div class="res-item">
+      <div><strong>${booking.space_title}</strong></div>
+      <div class="muted">${booking.student_email}</div>
+      <div class="muted">Checked in: ${formatRawDateTime(booking.checked_in_at)}</div>
+      <div class="muted">Expected checkout: ${booking.expected_checkout || 'Not set'}</div>
+      <div class="res-actions">
+        <button class="btn-danger btn-small" onclick="endStudentBooking('${booking.id}', this)">End Booking</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function endStudentBooking(id, button){
+  const booking = activeBookings.find(item => String(item.id) === String(id));
+  if(!booking) return;
+  if(!window.confirm(`End ${booking.student_email}'s booking for ${booking.space_title}?`)) return;
+
+  const status = document.getElementById('activeBookingStatus');
+  button.disabled = true;
+  status.className = 'form-status';
+  status.textContent = 'Ending booking...';
+
+  const rpcArgs = { p_reservation_id: booking.id };
+  if(STAFF_AUTH_BYPASS) rpcArgs.p_staff_email = staffEmail;
+  const { data, error } = await db.rpc('staff_end_student_booking', rpcArgs);
+
+  if(error || !data?.success){
+    button.disabled = false;
+    status.className = 'form-status error';
+    status.textContent = error?.message || data?.message || 'Unable to end booking.';
+    return;
+  }
+
+  await Promise.all([loadActiveBookings(), loadLogs(), loadSpaces()]);
+  status.className = 'form-status success';
+  status.textContent = data.message;
+}
+
+function reservationActions(r){
+  const recurring = r.recurring && r.recurring !== 'No';
+  return `<div class="res-actions">
+    <button class="btn btn-small" onclick="openEditReservation('${r.id}')">Edit</button>
+    <button class="btn-danger btn-small" onclick="cancelReservation('${r.id}', false)">Cancel Event</button>
+    ${recurring ? `<button class="btn-danger btn-small" onclick="cancelReservation('${r.id}', true)">Cancel Series</button>` : ''}
+  </div>`;
+}
+
+async function loadReservations(){
+  const rangeStart = new Date(currentYear, currentMonth, 1);
+  const rangeEnd = new Date(currentYear, currentMonth + 1, 1);
+  const { data, error } = await db.rpc('get_staff_reservations_for_range', {
+    p_range_start: rangeStart.toISOString(),
+    p_range_end: rangeEnd.toISOString()
+  });
+  if(error){
+    console.error('Could not load staff reservations:', error);
+    reservations = [];
+    document.getElementById('staffReservationList').innerHTML =
+      '<div class="muted">Unable to load staff reservations.</div>';
+    renderCalendar();
+    renderSelectedDayReservations();
+    return;
+  }
+  reservations = data || [];
+  renderCurrentReservations();
+  renderCalendar();
+  renderSelectedDayReservations();
+}
+
+function renderCurrentReservations(){
+  const box = document.getElementById('staffReservationList');
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const todaysReservations = reservations.filter(r =>
+    new Date(r.starts_at) < tomorrowStart && new Date(r.ends_at) > todayStart
+  );
+  if(!todaysReservations.length){
+    box.innerHTML = '<div class="muted">No staff reservations today.</div>';
+    return;
+  }
+  box.innerHTML = todaysReservations.map(r => `
+    <div class="res-item">
+      <div><strong>${r.space_title}</strong></div>
+      <div class="muted">${r.reason}</div>
+      <div class="muted">${formatRawDateTime(r.starts_at)} → ${formatRawDateTime(r.ends_at)}</div>
+      <div class="muted">By: ${r.reserved_by}${r.recurring && r.recurring !== 'No' ? ' • ' + r.recurring : ''}</div>
+      ${reservationActions(r)}
+    </div>
+  `).join('');
+}
+
+async function loadLogs(){
+  const box = document.getElementById('logsList');
+  const { data, error } = STAFF_AUTH_BYPASS
+    ? await db.rpc('get_today_logs', { p_email: staffEmail })
+    : await db.rpc('get_today_logs');
+  if(error || !data){
+    box.innerHTML = '<div class="muted">Unable to load logs.</div>';
+    return;
+  }
+  if(!data.length){
+    box.innerHTML = '<div class="muted">No logs for today.</div>';
+    return;
+  }
+  box.innerHTML = data.map(log => `
+    <div class="res-item">
+      <div><strong>${log.space_title}</strong> — ${log.action}</div>
+      <div class="muted">${log.student_email}</div>
+      <div class="muted">${new Date(log.created_at).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+function formatRawDateTime(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return Number.isNaN(date.getTime()) ? dateStr : date.toLocaleString();
+}
+
+function toLocalISOString(dateString) {
+  if (!dateString) return '';
+  return dateString.length === 16 ? `${dateString}:00` : dateString;
+}
+
+function buildMonthYearDropdowns(){
+  const monthDropdown = document.getElementById('monthDropdown');
+  const yearDropdown = document.getElementById('yearDropdown');
+  monthDropdown.innerHTML = '';
+  yearDropdown.innerHTML = '';
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  monthNames.forEach((m, i) => monthDropdown.add(new Option(m, i)));
+
+  const startYear = new Date().getFullYear();
+  for(let y=startYear; y<=startYear+10; y++){
+    yearDropdown.add(new Option(y, y));
+  }
+
+  monthDropdown.value = currentMonth;
+  yearDropdown.value = currentYear;
+
+  monthDropdown.onchange = async () => {
+    currentMonth = parseInt(monthDropdown.value, 10);
+    selectedDate = new Date(currentYear, currentMonth, 1);
+    await loadReservations();
+  };
+  yearDropdown.onchange = async () => {
+    currentYear = parseInt(yearDropdown.value, 10);
+    selectedDate = new Date(currentYear, currentMonth, 1);
+    await loadReservations();
+  };
+
+  document.getElementById('prevMonthBtn').onclick = async () => {
+    currentMonth--;
+    if(currentMonth < 0){ currentMonth = 11; currentYear--; }
+    selectedDate = new Date(currentYear, currentMonth, 1);
+    buildMonthYearDropdowns();
+    await loadReservations();
+  };
+  document.getElementById('nextMonthBtn').onclick = async () => {
+    currentMonth++;
+    if(currentMonth > 11){ currentMonth = 0; currentYear++; }
+    selectedDate = new Date(currentYear, currentMonth, 1);
+    buildMonthYearDropdowns();
+    await loadReservations();
+  };
+}
+
+function reservationOverlapsDay(reservation, day){
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  return new Date(reservation.starts_at) < dayEnd &&
+         new Date(reservation.ends_at) > dayStart;
+}
+
+function renderCalendar(){
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const lastDay = new Date(currentYear, currentMonth + 1, 0);
+  const startOffset = firstDay.getDay();
+
+  for(let i=0; i<startOffset; i++){
+    const blank = document.createElement('div');
+    blank.className = 'calendar-cell';
+    blank.style.visibility = 'hidden';
+    grid.appendChild(blank);
+  }
+
+  for(let d=1; d<=lastDay.getDate(); d++){
+    const cellDate = new Date(currentYear, currentMonth, d);
+    const count = reservations.filter(r => reservationOverlapsDay(r, cellDate)).length;
+
+    const cell = document.createElement('div');
+    cell.className = 'calendar-cell';
+    if(
+      selectedDate.getFullYear() === cellDate.getFullYear() &&
+      selectedDate.getMonth() === cellDate.getMonth() &&
+      selectedDate.getDate() === cellDate.getDate()
+    ){
+      cell.classList.add('selected');
+    }
+
+    cell.innerHTML = `
+      <div class="calendar-day">${d}</div>
+      <div class="calendar-count">${count} reservation${count !== 1 ? 's' : ''}</div>
+    `;
+
+    cell.onclick = () => {
+      selectedDate = cellDate;
+      renderCalendar();
+      renderSelectedDayReservations();
+    };
+
+    grid.appendChild(cell);
+  }
+
+  document.getElementById('selectedDateLabel').textContent =
+    `Selected: ${selectedDate.toLocaleDateString()}`;
+}
+
+function renderSelectedDayReservations(){
+  const box = document.getElementById('selectedDayReservations');
+  const list = reservations.filter(r => reservationOverlapsDay(r, selectedDate));
+
+  if(!list.length){
+    box.innerHTML = '<div class="muted">No reservations for selected day.</div>';
+    return;
+  }
+
+  box.innerHTML = list.map(r => `
+    <div class="res-item">
+      <div><strong>${r.space_title}</strong></div>
+      <div class="muted">${r.reason}</div>
+      <div class="muted">${formatRawDateTime(r.starts_at)} → ${formatRawDateTime(r.ends_at)}</div>
+      <div class="muted">By: ${r.reserved_by}</div>
+      ${reservationActions(r)}
+    </div>
+  `).join('');
+}
+
+function toDateTimeLocal(value){
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function openEditReservation(id){
+  const reservation = reservations.find(r => String(r.id) === String(id));
+  if(!reservation) return;
+  editingReservationId = reservation.id;
+  document.getElementById('editStaffLocation').value = reservation.space_title;
+  document.getElementById('editStaffStart').value = toDateTimeLocal(reservation.starts_at);
+  document.getElementById('editStaffEnd').value = toDateTimeLocal(reservation.ends_at);
+  document.getElementById('editStaffReason').value = reservation.reason || '';
+  document.getElementById('editStaffStatus').textContent = '';
+  document.getElementById('editReservationModal').style.display = 'flex';
+}
+
+document.getElementById('editStaffCloseBtn').addEventListener('click', () => {
+  document.getElementById('editReservationModal').style.display = 'none';
+});
+
+document.getElementById('editStaffSaveBtn').addEventListener('click', async () => {
+  const space = document.getElementById('editStaffLocation').value;
+  const startsAt = document.getElementById('editStaffStart').value;
+  const endsAt = document.getElementById('editStaffEnd').value;
+  const reason = document.getElementById('editStaffReason').value.trim();
+  const status = document.getElementById('editStaffStatus');
+  if(!space || !startsAt || !endsAt || !reason){
+    status.textContent = 'Please fill out all fields.';
+    status.className = 'form-status error';
+    return;
+  }
+  const { data, error } = await db.rpc('update_staff_reservation', {
+    p_reservation_id: editingReservationId,
+    ...(STAFF_AUTH_BYPASS ? { p_staff_email: staffEmail } : {}),
+    p_space_title: space,
+    p_reason: reason,
+    p_starts_at: new Date(startsAt).toISOString(),
+    p_ends_at: new Date(endsAt).toISOString()
+  });
+  if(error || !data?.success){
+    status.textContent = error?.message || data?.message || 'Unable to update reservation.';
+    status.className = 'form-status error';
+    return;
+  }
+  document.getElementById('editReservationModal').style.display = 'none';
+  await loadReservations();
+});
+
+async function cancelReservation(id, cancelSeries){
+  const reservation = reservations.find(r => String(r.id) === String(id));
+  if(!reservation) return;
+  if(cancelSeries && (!reservation.recurring || reservation.recurring === 'No')) return;
+  const label = cancelSeries ? 'the entire recurring series' : 'this event';
+  if(!window.confirm(`Cancel ${label}? This cannot be undone.`)) return;
+  const functionName = cancelSeries ? 'cancel_staff_reservation_series' : 'cancel_staff_reservation';
+  const rpcArgs = { p_reservation_id: reservation.id };
+  if(STAFF_AUTH_BYPASS) rpcArgs.p_staff_email = staffEmail;
+  const { data, error } = await db.rpc(functionName, rpcArgs);
+  if(error || !data?.success){
+    window.alert(error?.message || data?.message || 'Unable to cancel reservation.');
+    return;
+  }
+  await loadReservations();
+}
+
+document.getElementById('staffSubmitBtn').addEventListener('click', async () => {
+  const space = document.getElementById('staffLocation').value;
+  const recurring = document.getElementById('staffRecurring').value;
+  const startsAt = document.getElementById('staffStart').value;
+  const endsAt = document.getElementById('staffEnd').value;
+  const reason = document.getElementById('staffReason').value;
+
+  if (!space || !startsAt || !endsAt || !reason) {
+    document.getElementById('staffFormStatus').textContent = 'Please fill out all fields.';
+    document.getElementById('staffFormStatus').className = 'form-status error';
+    return;
+  }
+
+  const isoStartsAt = new Date(startsAt).toISOString();
+  const isoEndsAt = new Date(endsAt).toISOString();
+
+  const { data, error } = await db.rpc('create_staff_reservation', {
+    p_space_title: space,
+    p_reason: reason,
+    p_reserved_by: staffEmail,
+    p_recurring: recurring,
+    p_starts_at: isoStartsAt,
+    p_ends_at: isoEndsAt
+  });
+
+  if (error) {
+    document.getElementById('staffFormStatus').textContent = error.message;
+    document.getElementById('staffFormStatus').className = 'form-status error';
+    return;
+  }
+
+  if (!data.success) {
+    document.getElementById('staffFormStatus').textContent = data.message;
+    document.getElementById('staffFormStatus').className = 'form-status error';
+    return;
+  }
+
+  const formattedStart = new Date(startsAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+  const formattedEnd = new Date(endsAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+
+  if(EMAIL_NOTIFICATIONS_ENABLED){
+    const emailRes = await db.functions.invoke('send-staff-reservation-email', {
+      body: {
+        staff_email: staffEmail,
+        space_title: space,
+        reason: reason,
+        recurring: recurring,
+        starts_at: formattedStart,
+        ends_at: formattedEnd
+      }
+    });
+
+    if (emailRes.error) {
+      console.error("Email send error:", emailRes.error);
+      document.getElementById('staffFormStatus').textContent = 'Reservation created, but its confirmation email failed.';
+      document.getElementById('staffFormStatus').className = 'form-status error';
+    } else {
+      document.getElementById('staffFormStatus').textContent = 'Reservation created and email sent!';
+      document.getElementById('staffFormStatus').className = 'form-status success';
+    }
+  } else {
+    document.getElementById('staffFormStatus').textContent = 'Reservation created.';
+    document.getElementById('staffFormStatus').className = 'form-status success';
+  }
+
+  await loadReservations();
+});
+
+async function initStaffPage(){
+  await loadSpaces();
+  await loadActiveBookings();
+  await loadReservations();
+  await loadLogs();
+  buildMonthYearDropdowns();
+  renderCalendar();
+  renderSelectedDayReservations();
+}
+
+(async function(){
+  if(STAFF_AUTH_BYPASS){
+    const savedEmail = (localStorage.getItem('staffEmail') || '').trim().toLowerCase();
+    if(savedEmail && await isStaffUser(savedEmail)){
+      staffEmail = savedEmail;
+      document.getElementById('staffEmailInput').value = staffEmail;
+      document.getElementById('emailModal').style.display = 'none';
+      await initStaffPage();
+    }
+    return;
+  }
+  const { data, error } = await db.auth.getSession();
+  if(error) console.error('Could not restore staff session:', error);
+  const sessionEmail = data?.session?.user?.email?.trim().toLowerCase();
+  if(sessionEmail && sessionEmail.endsWith('@tamu.edu')){
+    staffEmail = sessionEmail;
+    const ok = await isStaffUser(staffEmail);
+    if(ok){
+      document.getElementById('staffEmailInput').value = staffEmail;
+      document.getElementById('emailModal').style.display = 'none';
+      await initStaffPage();
+      return;
+    }
+    await db.auth.signOut();
+    staffEmail = null;
+  }
+})();
+
+</script>
+
+
+</body>
+</html>
